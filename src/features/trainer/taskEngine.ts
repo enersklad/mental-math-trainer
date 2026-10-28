@@ -28,22 +28,36 @@ function getNumberByConfig(config: TaskConfig, digits: number): number {
 }
 
 // Генерация неправильных ответов для теста
-function generateOptions(correctAnswer: number): number[] {
+function generateOptions(correctAnswer: number, isMultiplicationTable = false): number[] {
   const options = new Set<number>();
   options.add(correctAnswer);
 
-  const deltas = [-8, -6, -4, -2, 2, 4, 6, 8];
-  
-  while (options.size < 4) {
-    const delta = deltas[Math.floor(Math.random() * deltas.length)];
-    const wrongAnswer = correctAnswer + delta;
-    // Добавляем, только если это не 0 (если ответ не 0) и еще нет в списке
-    if (wrongAnswer !== 0 || correctAnswer === 0) {
-      options.add(wrongAnswer);
+  if (isMultiplicationTable) {
+    // Твой алгоритм для таблицы умножения
+    const tableValues = [4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 24, 25, 27, 28, 30, 32, 35, 36, 40, 42, 45, 48, 49, 54, 56, 63, 64, 72, 81];
+    
+    // Берем 3 ближайших значения меньше и 3 ближайших больше
+    const lower = tableValues.filter(v => v < correctAnswer).slice(-3);
+    const higher = tableValues.filter(v => v > correctAnswer).slice(0, 3);
+    const candidates = [...lower, ...higher];
+
+    // Перемешиваем кандидатов и берем 3 случайных
+    const shuffled = candidates.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < 3; i++) {
+      if (shuffled[i]) options.add(shuffled[i]);
+    }
+  } else {
+    // Старый алгоритм для остальных режимов
+    const deltas = [-8, -6, -4, -2, 2, 4, 6, 8];
+    while (options.size < 4) {
+      const delta = deltas[Math.floor(Math.random() * deltas.length)];
+      const wrongAnswer = correctAnswer + delta;
+      if (wrongAnswer !== 0 || correctAnswer === 0) {
+        options.add(wrongAnswer);
+      }
     }
   }
 
-  // Перемешиваем массив (Fisher-Yates shuffle)
   return Array.from(options).sort(() => Math.random() - 0.5);
 }
 
@@ -65,9 +79,7 @@ export function generateTask(config: TaskConfig): Task {
   // СПЕЦИАЛЬНАЯ ЛОГИКА ДЛЯ ТАБЛИЦЫ УМНОЖЕНИЯ
   if (config.multiplicationDigits && config.multiplicationDigits.length > 0) {
     const digits = config.multiplicationDigits;
-    // Выбираем случайную цифру из выбранных пользователем
     const a = digits[Math.floor(Math.random() * digits.length)];
-    // Второй множитель от 2 до 9
     const b = Math.floor(Math.random() * 8) + 2; 
     const answer = a * b;
     
@@ -75,59 +87,156 @@ export function generateTask(config: TaskConfig): Task {
       expression: `${a} × ${b}`,
       answer,
       deliveryType: config.deliveryType,
-      // Для тестов генерируем варианты
-      options: config.deliveryType === 'test' ? generateOptions(answer) : undefined,
+      options: config.deliveryType === 'test' ? generateOptions(answer, true) : undefined,
     };
   }
 
-  const op1 = pickOperation(config.operations);
-  
+  // ОБЫЧНАЯ ЛОГИКА
+  const formatNum = (num: number) => (num < 0 ? `(${num})` : `${num}`);
   const pair1 = pickDigitPair(config.digitPairs);
-  const a = getNumberByConfig(config, pair1[0]);
-  
   const pair2 = config.digitPairs[1] || pair1;
-  const b = getNumberByConfig(config, pair2[0]);
-
+  
   let expression = '';
   let answer = 0;
 
-  const formatNum = (num: number) => (num < 0 ? `(${num})` : `${num}`);
-
-  const applyOp = (currentVal: number, nextVal: number, operation: Operation): number => {
-    switch (operation) {
-      case 'add': return currentVal + nextVal;
-      case 'sub': return currentVal - nextVal;
-      case 'mul': return currentVal * nextVal;
-      case 'div': return nextVal !== 0 ? currentVal / nextVal : currentVal;
-      default: return currentVal + nextVal;
-    }
+  // Функция для генерации одного числа с учетом знака
+  const getNum = (digits: number) => {
+    let num = generateNumber(digits);
+    if (config.signType === 'both' && Math.random() < 0.3) num = -num;
+    return num;
   };
 
-  if (op1 === 'div') {
-    const bDiv = Math.abs(b) || 2;
-    const quotient = generateNumber(pair2[1] || 1);
-    const aDiv = bDiv * quotient;
-    expression = `${formatNum(aDiv)} ÷ ${formatNum(bDiv)}`;
-    answer = quotient;
-  } else {
-    const opSymbol = op1 === 'add' ? '+' : op1 === 'sub' ? '-' : '×';
-    expression = `${formatNum(a)} ${opSymbol} ${formatNum(b)}`;
-    answer = applyOp(a, b, op1);
-  }
+  // Если переменных 2
+  if (config.operandCount === 2) {
+    const op = pickOperation(config.operations);
+    const a = getNum(pair1[0]);
+    const b = getNum(pair2[0]);
 
-  if (config.operandCount === 3) {
-    const op2 = pickOperation(config.operations);
-    const pair3 = config.digitPairs[1] || pair1;
-    let c = getNumberByConfig(config, pair3[0]);
-
-    if (op2 === 'div') {
-      c = Math.abs(c) || 2; 
-      expression = `(${expression}) ÷ ${formatNum(c)}`;
-      answer = applyOp(answer, c, 'div');
+    if (op === 'div') {
+      // Для деления: генерируем b и частное, чтобы a нацело делилось на b
+      const bDiv = Math.abs(b) || 2;
+      const quotient = generateNumber(pair2[1] || 1);
+      const aDiv = bDiv * quotient;
+      expression = `${formatNum(aDiv)} ÷ ${formatNum(bDiv)}`;
+      answer = quotient;
+    } else if (op === 'mul') {
+      expression = `${formatNum(a)} × ${formatNum(b)}`;
+      answer = a * b;
+    } else if (op === 'add') {
+      expression = `${formatNum(a)} + ${formatNum(b)}`;
+      answer = a + b;
     } else {
-      const opSymbol2 = op2 === 'add' ? '+' : op2 === 'sub' ? '-' : '×';
-      expression = `${expression} ${opSymbol2} ${formatNum(c)}`;
-      answer = applyOp(answer, c, op2);
+      expression = `${formatNum(a)} - ${formatNum(b)}`;
+      answer = a - b;
+    }
+  } 
+
+  // Если переменных 3
+  else {
+    const op1 = pickOperation(config.operations);
+    const op2 = pickOperation(config.operations);
+    
+    // Вспомогательные функции
+    const apply = (x: number, y: number, operation: Operation) => {
+      switch(operation) {
+        case 'add': return x + y;
+        case 'sub': return x - y;
+        case 'mul': return x * y;
+        case 'div': return y !== 0 ? x / y : x;
+        default: return x + y;
+      }
+    };
+    const formatSymbol = (op: Operation) => op === 'add' ? '+' : op === 'sub' ? '-' : op === 'mul' ? '×' : '÷';
+
+    // Если оба действия — умножение/деление (высокий приоритет)
+    if ((op1 === 'mul' || op1 === 'div') && (op2 === 'mul' || op2 === 'div')) {
+      const finalQuotient = generateNumber(pair2[1] || 1);
+      
+      if (op1 === 'mul' && op2 === 'mul') {
+        const a = generateNumber(pair1[0]);
+        const b = generateNumber(pair2[0]);
+        const c = generateNumber(pair2[0]);
+        expression = `${formatNum(a)} × ${formatNum(b)} × ${formatNum(c)}`;
+        answer = a * b * c;
+      } 
+      else if (op1 === 'mul' && op2 === 'div') {
+        const b = generateNumber(pair2[0]);
+        const c = Math.abs(generateNumber(pair2[0])) || 2;
+        const a = Math.round((finalQuotient * c) / b) || 1; 
+        expression = `(${formatNum(a)} × ${formatNum(b)}) ÷ ${formatNum(c)}`;
+        answer = (a * b) / c;
+      } 
+      else if (op1 === 'div' && op2 === 'mul') {
+        const cNew = generateNumber(pair2[0]);
+        const bNew = Math.abs(generateNumber(pair2[0])) || 2;
+        expression = `(${formatNum(bNew * finalQuotient)} ÷ ${formatNum(bNew)}) × ${formatNum(cNew)}`;
+        answer = finalQuotient * cNew; 
+      } 
+      else if (op1 === 'div' && op2 === 'div') {
+        const b = Math.abs(generateNumber(pair2[0])) || 2;
+        const c = Math.abs(generateNumber(pair2[0])) || 2;
+        const a = finalQuotient * b * c;
+        expression = `${formatNum(a)} ÷ ${formatNum(b)} ÷ ${formatNum(c)}`;
+        answer = finalQuotient;
+      }
+    } 
+    // Если есть + или -, а также умножение/деление
+    else {
+      const a = getNum(pair1[0]);
+      const b = getNum(pair2[0]);
+      const c = getNum(pair2[0]);
+
+      if (op1 === 'div' || op2 === 'div') {
+        if (op1 === 'div') {
+          const bDiv = Math.abs(b) || 2;
+          const quotient = generateNumber(pair2[1] || 1);
+          const aDiv = bDiv * quotient;
+          
+          if (op2 === 'add') {
+            expression = `${formatNum(aDiv)} ÷ ${formatNum(bDiv)} + ${formatNum(c)}`;
+            answer = quotient + c;
+          } else if (op2 === 'sub') {
+            expression = `${formatNum(aDiv)} ÷ ${formatNum(bDiv)} - ${formatNum(c)}`;
+            answer = quotient - c;
+          } else if (op2 === 'mul') {
+             expression = `(${formatNum(aDiv)} ÷ ${formatNum(bDiv)}) × ${formatNum(c)}`;
+             answer = quotient * c;
+          } else {
+             const cDiv = Math.abs(c) || 2;
+             const aFinal = quotient * bDiv * cDiv;
+             expression = `(${formatNum(aFinal)} ÷ ${formatNum(bDiv)}) ÷ ${formatNum(cDiv)}`;
+             answer = aFinal / bDiv / cDiv;
+          }
+        } 
+        else if (op2 === 'div') {
+          const cDiv = Math.abs(c) || 2;
+          const quotient = generateNumber(pair2[1] || 1);
+          const bDiv = cDiv * quotient;
+
+          if (op1 === 'add') {
+            expression = `${formatNum(a)} + (${formatNum(bDiv)} ÷ ${formatNum(cDiv)})`;
+            answer = a + quotient;
+          } else if (op1 === 'sub') {
+            expression = `${formatNum(a)} - (${formatNum(bDiv)} ÷ ${formatNum(cDiv)})`;
+            answer = a - quotient;
+          } else if (op1 === 'mul') {
+             expression = `${formatNum(a)} × (${formatNum(bDiv)} ÷ ${formatNum(cDiv)})`;
+             answer = a * quotient;
+          }
+        }
+      } 
+      else {
+        if (op2 === 'mul') {
+          expression = `${formatNum(a)} ${formatSymbol(op1)} (${formatNum(b)} × ${formatNum(c)})`;
+          answer = apply(a, b * c, op1);
+        } else if (op1 === 'mul') {
+          expression = `(${formatNum(a)} × ${formatNum(b)}) ${formatSymbol(op2)} ${formatNum(c)}`;
+          answer = apply(a * b, c, op2);
+        } else {
+          expression = `${formatNum(a)} ${formatSymbol(op1)} ${formatNum(b)} ${formatSymbol(op2)} ${formatNum(c)}`;
+          answer = apply(apply(a, b, op1), c, op2);
+        }
+      }
     }
   }
 
@@ -149,8 +258,7 @@ export function generateTask(config: TaskConfig): Task {
   }
 
   if (finalDelivery === 'window') {
-    // Для окошек маскируем последнее число (или операцию, если это деление)
-    const lastOp = config.operandCount === 3 ? op1 : op1; 
+    const lastOp = config.operandCount === 3 ? pickOperation(config.operations) : pickOperation(config.operations); 
     task.maskedExpression = maskExpression(expression, answer, lastOp);
   }
 

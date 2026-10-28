@@ -60,8 +60,8 @@ export function ResultScreen({ result, canLevelUp, onLevelUp, onRestart, onGoHom
   // Фильтруем только те задания, где была ошибка
   const mistakes = result.history?.filter((task) => !task.isCorrect) || [];
 
-  // Проверяем, был ли это режим "до первой ошибки" (Выживание) и проиграл ли пользователь
-  const isFailedEarly = result.config.failOnError;
+  // Игра провалена, только если была ошибка (решено меньше, чем всего) и включен режим "до первой ошибки"
+  const isFailedEarly = result.config.failOnError && result.correctCount < result.totalTasks;
 
   if (isFailedEarly) {
     // Если это Выживание, то проигрыш — это нормальное завершение

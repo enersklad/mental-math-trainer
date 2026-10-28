@@ -76,10 +76,27 @@ export function MultiplicationSettingsScreen({ onStart, onBack }: Props) {
         </button>
         {/* Кнопку Выживание добавим позже, когда сделаем саму логику выживания */}
         <button
-          className="border-2 border-blue-600 text-blue-600 px-6 py-2 rounded hover:bg-blue-50 w-full opacity-50 cursor-not-allowed"
-          disabled
+          className="border-2 border-red-600 text-red-600 px-6 py-2 rounded hover:bg-red-50 w-full font-medium"
+          onClick={() => {
+            if (selectedDigits.length === 0) {
+              alert("Выберите хотя бы одну цифру!");
+              return;
+            }
+            const config: TaskConfig = {
+              operations: ['mul'],
+              digitPairs: [[1, 1]],
+              numberType: 'int',
+              signType: 'positive',
+              taskCount: 999, // Бесконечные примеры
+              operandCount: 2,
+              deliveryType: 'classic',
+              multiplicationDigits: selectedDigits,
+              failOnError: true // <--- ВЫЛЕТ ПРИ ОШИБКЕ
+            };
+            onStart(config);
+          }}
         >
-          Выживание (скоро)
+          Выживание
         </button>
       </div>
     </div>

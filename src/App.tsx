@@ -101,9 +101,12 @@ export default function App() {
 
         {/* Контент */}
         <main className="mt-8">
-          {screen === 'home' && (
-            <HomeScreen onSelectMode={handleSelectMode} />
-          )}
+        {screen === 'home' && (
+          <HomeScreen 
+            onSelectMode={handleSelectMode} 
+            sessions={progress.sessions} 
+          />
+        )}
 
         {screen === 'settings' && activeMode === 'speed' && (
           <SpeedSettingsScreen 
